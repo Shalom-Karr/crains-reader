@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crain's Reader</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .article a { color: #38bdf8; text-decoration: underline; text-underline-offset: 2px; }
+  .article p { margin: 0 0 1.1rem; line-height: 1.75; font-size: 1.0625rem; }
+  .article h2, .article h3 { color: #f1f5f9; font-weight: 600; margin: 1.75rem 0 .75rem; }
+  .article h2 { font-size: 1.375rem; }
+  .article h3 { font-size: 1.125rem; }
+  .article ul, .article ol { margin: 0 0 1.1rem 1.5rem; line-height: 1.7; }
+  .article ul { list-style: disc; }
+  .article ol { list-style: decimal; }
+  .article blockquote { border-left: 3px solid #38bdf8; padding-left: 1rem; margin: 1.25rem 0; color: #cbd5e1; font-style: italic; }
+  .article hr { border-color: #334155; margin: 1.5rem 0; }
+  figure { margin: 0 0 1.5rem; }
+  figcaption { font-size: .8125rem; color: #94a3b8; margin-top: .5rem; }
+</style>
+</head>
+<body class="min-h-screen text-slate-200" style="background:#0f172a">
+<div class="max-w-3xl mx-auto px-4 py-8">
+  <header class="mb-6">
+    <h1 class="text-2xl font-semibold text-white">Crain's Reader</h1>
+    <p class="text-sm text-slate-400 mt-1">Paste an article URL from any Crain's site to read the full text.</p>
+  </header>
+
+  <form id="form" class="rounded-xl p-4 flex gap-2" style="background:#1e293b">
+    <input id="url" type="url" required placeholder="https://www.crainscleveland.com/..." autocomplete="off"
+           class="flex-1 min-w-0 rounded-lg px-3 py-2 bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500">
+    <button id="go" class="rounded-lg px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-medium">Fetch</button>
+  </form>
+  <div id="status" class="mt-3 text-sm text-slate-400 min-h-5"></div>
+
+  <article id="article" class="hidden mt-6 rounded-xl p-6 md:p-8" style="background:#1e293b"></article>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const form = $('form'), input = $('url'), btn = $('go'), statusEl = $('status'), art = $('article');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' });
+}
+
+function figure(img, cls) {
+  return `<figure class="${cls || ''}"><img src="${esc(img.url)}" alt="${esc(img.caption)}" class="rounded-lg w-full">` +
+    `<figcaption>${esc(img.caption)}${img.credit ? ` <span class="text-slate-500">(${esc(img.credit)})</span>` : ''}</figcaption></figure>`;
+}
+
+function renderEl(e) {
+  switch (e.type) {
+    case 'text': return `<p>${e.html}</p>`;
+    case 'header': { const l = Math.min(Math.max(e.level, 2), 3); return `<h${l}>${e.html}</h${l}>`; }
+    case 'list': { const t = e.ordered ? 'ol' : 'ul'; return `<${t}>${e.items.map(i => `<li>${i}</li>`).join('')}</${t}>`; }
+    case 'quote': return `<blockquote>${e.items.map(i => `<p>${i}</p>`).join('')}${e.citation ? `<cite class="not-italic text-sm">— ${esc(e.citation)}</cite>` : ''}</blockquote>`;
+    case 'image': return figure(e);
+    case 'divider': return '<hr>';
+    default: return '';
+  }
+}
+
+function toText(a, meta) {
+  const body = a.elements.map(e => { const d = document.createElement('div'); d.innerHTML = renderEl(e); return d.innerText.trim(); }).filter(Boolean);
+  return [a.headline, a.subheadline, meta, a.url, '', ...body].filter(Boolean).join('\n\n');
+}
+
+function render(a) {
+  const meta = [a.byline.join(', '), fmtDate(a.date), a.section].filter(Boolean).join(' · ');
+  art.innerHTML = `
+    ${a.image ? figure(a.image) : ''}
+    <h2 class="text-2xl md:text-3xl font-semibold text-white leading-tight">${esc(a.headline)}</h2>
+    ${a.subheadline ? `<p class="mt-2 text-lg text-slate-300">${esc(a.subheadline)}</p>` : ''}
+    <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-400">
+      <span>${esc(meta)}</span>
+      <a href="${esc(a.url)}" target="_blank" rel="noopener" class="text-sky-400 hover:underline">Open original</a>
+      <button id="copy" type="button" class="text-sky-400 hover:underline">Copy text</button>
+    </div>
+    <div class="article mt-6 text-slate-200">${a.elements.map(renderEl).join('')}</div>
+    ${a.skipped ? `<p class="mt-4 text-xs text-slate-500">${a.skipped} embedded element(s) not shown.</p>` : ''}`;
+  art.classList.remove('hidden');
+  $('copy').onclick = () => navigator.clipboard.writeText(toText(a, meta)).then(() => {
+    $('copy').textContent = 'Copied';
+    setTimeout(() => { $('copy').textContent = 'Copy text'; }, 1500);
+  });
+}
+
+async function load(url) {
+  btn.disabled = true;
+  art.classList.add('hidden');
+  statusEl.className = 'mt-3 text-sm text-slate-400 min-h-5';
+  statusEl.textContent = 'Fetching…';
+  try {
+    const r = await fetch('/api/article?url=' + encodeURIComponent(url));
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    render(data);
+    statusEl.textContent = `${data.elements.filter(e => e.type === 'text').length} paragraphs`;
+    history.replaceState(null, '', '?url=' + encodeURIComponent(url));
+  } catch (err) {
+    statusEl.className = 'mt-3 text-sm text-red-400 min-h-5';
+    statusEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+form.addEventListener('submit', e => { e.preventDefault(); load(input.value.trim()); });
+
+const initial = new URLSearchParams(location.search).get('url');
+if (initial) { input.value = initial; load(initial); }
+</script>
+</body>
+</html>
