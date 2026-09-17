@@ -8,7 +8,7 @@ Supported sites: Crain's Cleveland, Crain's Detroit, Crain's New York, Crain's C
 
 ## Share an article
 
-Every loaded article has a deep link. Use the **Copy link** button, or build it yourself:
+Every loaded article has a deep link. The **Share** button next to Fetch copies it (on phones it opens the native share sheet), or build it yourself:
 
 ```
 https://shalom-karr.github.io/crains-reader/?url=<article url>

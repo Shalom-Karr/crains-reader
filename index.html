@@ -31,6 +31,7 @@
     <input id="url" type="url" required placeholder="https://www.crainscleveland.com/..." autocomplete="off"
            class="flex-1 min-w-0 rounded-lg px-3 py-2 bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500">
     <button id="go" class="rounded-lg px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-medium">Fetch</button>
+    <button id="share" type="button" class="hidden rounded-lg px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium whitespace-nowrap">Share</button>
   </form>
   <div id="status" class="mt-3 text-sm text-slate-400 min-h-5"></div>
 
@@ -43,8 +44,9 @@ const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 const API = (LOCAL ? '' : WORKER_URL) + '/api/article';
 
 const $ = id => document.getElementById(id);
-const form = $('form'), input = $('url'), btn = $('go'), statusEl = $('status'), art = $('article');
+const form = $('form'), input = $('url'), btn = $('go'), shareBtn = $('share'), statusEl = $('status'), art = $('article');
 const TITLE = document.title;
+let current = null;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function fmtDate(iso) {
@@ -85,29 +87,41 @@ function render(a) {
       <span>${esc(meta)}</span>
       <a href="${esc(a.url)}" target="_blank" rel="noopener" class="text-sky-400 hover:underline">Open original</a>
       <button id="copy" type="button" class="text-sky-400 hover:underline">Copy text</button>
-      <button id="share" type="button" class="text-sky-400 hover:underline">Copy link</button>
     </div>
     <div class="article mt-6 text-slate-200">${a.elements.map(renderEl).join('')}</div>
     ${a.skipped ? `<p class="mt-4 text-xs text-slate-500">${a.skipped} embedded element(s) not shown.</p>` : ''}`;
   art.classList.remove('hidden');
-  copyButton('copy', 'Copy text', () => toText(a, meta));
-  copyButton('share', 'Copy link', () => deepLink(a.url));
+  $('copy').onclick = () => copyWithFeedback($('copy'), 'Copy text', toText(a, meta));
+  current = a;
+  shareBtn.classList.remove('hidden');
 }
 
 function deepLink(articleUrl) {
   return location.origin + location.pathname + '?url=' + encodeURIComponent(articleUrl);
 }
 
-function copyButton(id, label, getText) {
-  $(id).onclick = () => navigator.clipboard.writeText(getText()).then(() => {
-    $(id).textContent = 'Copied';
-    setTimeout(() => { $(id).textContent = label; }, 1500);
-  });
+function copyWithFeedback(el, label, text) {
+  navigator.clipboard.writeText(text).then(
+    () => { el.textContent = 'Copied'; },
+    () => { el.textContent = 'Copy failed'; }
+  ).then(() => setTimeout(() => { el.textContent = label; }, 1500));
 }
+
+shareBtn.onclick = async () => {
+  if (!current) return;
+  const url = deepLink(current.url);
+  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    try { await navigator.share({ title: current.headline, url }); } catch {}
+    return;
+  }
+  copyWithFeedback(shareBtn, 'Share', url);
+};
 
 async function load(url) {
   btn.disabled = true;
   art.classList.add('hidden');
+  shareBtn.classList.add('hidden');
+  current = null;
   statusEl.className = 'mt-3 text-sm text-slate-400 min-h-5';
   statusEl.textContent = 'Fetching…';
   document.title = TITLE;

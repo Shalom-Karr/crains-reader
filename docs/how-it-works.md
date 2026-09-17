@@ -55,7 +55,9 @@ Supported `content_elements` types: `text`, `header`, `list`, `quote`, `image`, 
 
 ## Deep links
 
-`index.html` reads `?url=` on load and fetches it immediately. After any successful load it rewrites the address bar to `?url=<canonical article url>` (tracking params stripped) and sets the document title to the headline, so the browser URL is always shareable. The **Copy link** button copies that same URL.
+`index.html` reads `?url=` on load and fetches it immediately. After any successful load it rewrites the address bar to `?url=<canonical article url>` (tracking params stripped) and sets the document title to the headline, so the browser URL is always shareable.
+
+The **Share** button beside Fetch appears only while an article is loaded. On touch-primary devices with `navigator.share` it opens the native share sheet with the headline and deep link; everywhere else it copies the deep link to the clipboard and shows "Copied" for 1.5s.
 
 ## API
 
