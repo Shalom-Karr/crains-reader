@@ -1,0 +1,7 @@
+{
+  "name": "crains-reader",
+  "account_id": "536d945663a8a3a20a671cf695c2e027",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "observability": { "enabled": true }
+}

@@ -38,8 +38,13 @@
 </div>
 
 <script>
+const WORKER_URL = 'https://crains-reader.shalomkarr.workers.dev';
+const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
+const API = (LOCAL ? '' : WORKER_URL) + '/api/article';
+
 const $ = id => document.getElementById(id);
 const form = $('form'), input = $('url'), btn = $('go'), statusEl = $('status'), art = $('article');
+const TITLE = document.title;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function fmtDate(iso) {
@@ -80,13 +85,23 @@ function render(a) {
       <span>${esc(meta)}</span>
       <a href="${esc(a.url)}" target="_blank" rel="noopener" class="text-sky-400 hover:underline">Open original</a>
       <button id="copy" type="button" class="text-sky-400 hover:underline">Copy text</button>
+      <button id="share" type="button" class="text-sky-400 hover:underline">Copy link</button>
     </div>
     <div class="article mt-6 text-slate-200">${a.elements.map(renderEl).join('')}</div>
     ${a.skipped ? `<p class="mt-4 text-xs text-slate-500">${a.skipped} embedded element(s) not shown.</p>` : ''}`;
   art.classList.remove('hidden');
-  $('copy').onclick = () => navigator.clipboard.writeText(toText(a, meta)).then(() => {
-    $('copy').textContent = 'Copied';
-    setTimeout(() => { $('copy').textContent = 'Copy text'; }, 1500);
+  copyButton('copy', 'Copy text', () => toText(a, meta));
+  copyButton('share', 'Copy link', () => deepLink(a.url));
+}
+
+function deepLink(articleUrl) {
+  return location.origin + location.pathname + '?url=' + encodeURIComponent(articleUrl);
+}
+
+function copyButton(id, label, getText) {
+  $(id).onclick = () => navigator.clipboard.writeText(getText()).then(() => {
+    $(id).textContent = 'Copied';
+    setTimeout(() => { $(id).textContent = label; }, 1500);
   });
 }
 
@@ -95,13 +110,15 @@ async function load(url) {
   art.classList.add('hidden');
   statusEl.className = 'mt-3 text-sm text-slate-400 min-h-5';
   statusEl.textContent = 'Fetching…';
+  document.title = TITLE;
   try {
-    const r = await fetch('/api/article?url=' + encodeURIComponent(url));
+    const r = await fetch(API + '?url=' + encodeURIComponent(url));
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
     render(data);
     statusEl.textContent = `${data.elements.filter(e => e.type === 'text').length} paragraphs`;
-    history.replaceState(null, '', '?url=' + encodeURIComponent(url));
+    document.title = `${data.headline} · ${TITLE}`;
+    history.replaceState(null, '', deepLink(data.url));
   } catch (err) {
     statusEl.className = 'mt-3 text-sm text-red-400 min-h-5';
     statusEl.textContent = err.message;
